@@ -55,6 +55,11 @@
     <button id="textsend" style="padding:10px 16px; background:#238636; border:none; color:#fff; border-radius:8px; cursor:pointer;">Send</button>
   </div>
 
+  <div id="stripwrap" style="margin-top:14px; display:none;">
+    <div style="font-size:12px; color:#8b949e; margin-bottom:6px;">live activity</div>
+    <div id="strip"></div>
+  </div>
+
   <div id="transcript"></div>
 </div>
 
@@ -86,6 +91,7 @@ function addMsg(cls, text) {
   d.textContent = text;
   transcript.prepend(d);
 }
+function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function setStatus(t, live=false) {
   st.textContent = t;
   st.className = 'status' + (live ? ' live' : '');
@@ -297,6 +303,40 @@ document.getElementById('textsend').addEventListener('click', sendTyped);
 document.getElementById('textin').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') sendTyped();
 });
+
+// ---- live activity strip (mini feed on the chat page) ----
+const stripWrap = document.getElementById('stripwrap');
+const stripEl = document.getElementById('strip');
+let lastStripTs = 0;
+function stripItem(it) {
+  const kind = it.kind || 'status';
+  const time = it.ts ? new Date(it.ts * 1000).toLocaleTimeString() : '';
+  const route = it.route ? ` <span style="color:#d29922">${esc(it.route)}</span>` : '';
+  const text = (it.summary || it.text || it.detail || '').slice(0, 140);
+  const color = kind === 'fail' ? '#f85149' : kind === 'summary' || kind === 'done' ? '#3fb950' : '#8b949e';
+  return `<div style="padding:6px 10px; border:1px solid #21262d; border-radius:8px; margin-bottom:6px; font-size:13px; background:#0d1117;">
+    <span style="color:#8b949e; font-size:11px;">${time}</span>
+    <span style="color:#58a6ff; font-size:10px; text-transform:uppercase; margin-left:6px;">${esc(kind)}</span>${route}
+    <div style="color:${color}; margin-top:2px;">${esc(text)}</div></div>`;
+}
+async function refreshStrip() {
+  try {
+    const r = await fetch(BASE + '/api/activity?limit=6', { headers: hdrs() });
+    if (!r.ok) return;
+    const d = await r.json();
+    const items = d.items || [];
+    if (!items.length) return;
+    stripWrap.style.display = 'block';
+    // only re-render when new items appeared
+    const newest = items[0].ts || 0;
+    if (newest > lastStripTs) {
+      lastStripTs = newest;
+      stripEl.innerHTML = items.map(stripItem).join('');
+    }
+  } catch (_) { /* bridge offline — leave the strip as-is */ }
+}
+setInterval(refreshStrip, 2000);
+refreshStrip();
 
 setStatus('ready');
 fetch(BASE + '/api/status').then(r => r.json()).then(d => {
