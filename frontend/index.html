@@ -43,8 +43,11 @@
     </div>
   </header>
 
-  <button class="ptt" id="ptt">Hold to talk</button>
-  <div class="hint">tap = toggle · release = send · esc = stop</div>
+  <button class="ptt" id="ptt">Click to talk</button>
+  <div class="hint" id="hint">click to start · click to stop · esc = stop</div>
+  <div class="row" style="justify-content:center; margin-top:10px;">
+    <button id="modebtn" style="padding:4px 12px; background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:6px; cursor:pointer; font-size:12px;">mode: click</button>
+  </div>
 
   <div class="row" style="margin-top:14px;">
     <input id="textin" type="text" placeholder="…or type a task (Enter to send)"
@@ -111,6 +114,7 @@ async function startRec() {
     processor.connect(ctx.destination);
     recording = true;
     setStatus('listening…', true);
+    updatePttUI();
   } catch (err) {
     addMsg('err', 'Mic error: ' + err.message);
     setStatus('mic error');
@@ -128,6 +132,7 @@ async function stopRec() {
   try { source.disconnect(); processor.disconnect(); ctx.close(); } catch (_) {}
   source = processor = ctx = null;
   setStatus('thinking…');
+  updatePttUI();
   if (total < 1600) {  // <0.1s of audio = accidental tap
     setStatus('too short — try again');
     setTimeout(() => setStatus('ready'), 1500);
@@ -209,26 +214,50 @@ async function playResult(data) {
   }
 }
 
-// ---- PTT: hold on desktop / toggle on touch ----
-let holdTimer = null;
+// ---- PTT: click-to-talk (default) OR hold-to-talk — both available ----
+// mode 'click': press once = start recording, press again = stop & send.
+// mode 'hold':  press and hold = recording, release = stop & send.
+let pttMode = localStorage.getItem('vdb_ptt_mode') || 'click';
+const modebtn = document.getElementById('modebtn');
+const hintEl = document.getElementById('hint');
+function updatePttUI() {
+  modebtn.textContent = 'mode: ' + pttMode;
+  if (pttMode === 'click') {
+    ptt.textContent = recording ? 'Click to stop' : 'Click to talk';
+    hintEl.textContent = 'click to start · click to stop · esc = stop';
+  } else {
+    ptt.textContent = recording ? 'Release to stop' : 'Hold to talk';
+    hintEl.textContent = 'hold to talk · release to send · esc = stop';
+  }
+}
+modebtn.addEventListener('click', () => {
+  pttMode = pttMode === 'click' ? 'hold' : 'click';
+  localStorage.setItem('vdb_ptt_mode', pttMode);
+  updatePttUI();
+});
+
+let ptrDown = false;
 ptt.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   if (busy) return;
-  if (pushMode === 'hold') {
-    holdTimer = setTimeout(() => { pushMode = 'toggle'; startRec(); }, 120);
+  ptrDown = true;
+  if (pttMode === 'hold') {
+    if (!recording) startRec();
   } else {
-    startRec();
+    // click mode: toggle on each press
+    if (recording) stopRec();
+    else startRec();
   }
 });
 ptt.addEventListener('pointerup', (e) => {
   e.preventDefault();
-  if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-  if (pushMode === 'hold' && !recording) { pushMode = 'toggle'; }
-  if (recording) stopRec();
+  ptrDown = false;
+  if (pttMode === 'hold' && recording) stopRec();
 });
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') { if (recording) stopRec(); }
 });
+updatePttUI();
 
 // ---- typed tasks (no mic needed) ----
 async function sendTyped() {
