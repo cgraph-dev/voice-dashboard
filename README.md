@@ -20,13 +20,10 @@ repo is the source of truth for the pages — the bridge reads them from
 here if the repo is checked out at the default path.
 
 ```bash
-# 1. open the local dashboard
+# open the local dashboard
 ./open.sh
 
-# 2. open the public tunnel URL (works from your phone, anywhere)
-./open.sh --tunnel
-
-# 3. print the current URL without opening
+# or print the URL
 ./open.sh --url
 ```
 
@@ -59,19 +56,12 @@ vercel --prod
 `vercel.json` rewrites `/` → `index.html` and `/activity` → `activity.html`.
 No serverless functions needed — it's pure static.
 
-## Tunnel (how your PC is reachable from outside)
+## Access
 
-The bridge repo ships `scripts/voice-dashboard-tunnel.sh` + a systemd user
-service (`voice-dashboard-tunnel.service`) that publishes port 8890 via a
-Pinggy SSH tunnel when your PC is on:
-
-```bash
-systemctl --user enable --now voice-dashboard-tunnel.service
-cat ~/.local/state/openclaw-voice-bridge/tunnel.url   # current public URL
-```
-
-Free tier: URL changes every 60 min (the service restarts automatically and
-rewrites the file). Pinggy Pro gives a persistent subdomain.
+- **Localhost** (default): the bridge serves the dashboard at
+  `http://127.0.0.1:8890` — open it with `./open.sh` or the `qubit` command.
+- **Remote later**: deploy this repo to Vercel (static) and the page's ⚙ gear
+  lets you point it at your PC (tunnel/API URL + token) when you set that up.
 
 ## Editing
 
