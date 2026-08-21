@@ -85,17 +85,29 @@ function render(items){
   if (!items.length) feed.innerHTML = '<div id="empty">no activity yet</div>';
 }
 async function refresh(){
-  try {
-    const r = await fetch(BASE + '/api/activity?limit=200', { headers: hdrs() });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
-    conn.textContent = 'live · ' + (d.items || []).length + ' items';
-    conn.className = 'live';
-    render(d.items || []);
-  } catch (_) {
-    conn.textContent = 'bridge offline';
-    conn.className = '';
+  // If a saved/query API URL exists but fails (stale tunnel URL after Pinggy
+  // rotated it), fall back to same-origin automatically so the page always
+  // finds the bridge it was served from.
+  const candidates = BASE ? [BASE, ''] : [''];
+  for (const base of candidates) {
+    try {
+      const r = await fetch(base + '/api/activity?limit=200', { headers: hdrs() });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      conn.textContent = 'live · ' + (d.items || []).length + ' items';
+      conn.className = 'live';
+      render(d.items || []);
+      if (base !== BASE) {
+        // stale saved URL — remember the working one for next time
+        try { localStorage.setItem('vdb_api', base); } catch (_) {}
+      }
+      return;
+    } catch (_) {
+      // try next candidate
+    }
   }
+  conn.textContent = 'bridge offline (no api url works)';
+  conn.className = '';
 }
 setInterval(refresh, 2000);
 refresh();

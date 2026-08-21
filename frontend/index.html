@@ -320,28 +320,43 @@ function stripItem(it) {
     <div style="color:${color}; margin-top:2px;">${esc(text)}</div></div>`;
 }
 async function refreshStrip() {
-  try {
-    const r = await fetch(BASE + '/api/activity?limit=6', { headers: hdrs() });
-    if (!r.ok) return;
-    const d = await r.json();
-    const items = d.items || [];
-    if (!items.length) return;
-    stripWrap.style.display = 'block';
-    // only re-render when new items appeared
-    const newest = items[0].ts || 0;
-    if (newest > lastStripTs) {
-      lastStripTs = newest;
-      stripEl.innerHTML = items.map(stripItem).join('');
-    }
-  } catch (_) { /* bridge offline — leave the strip as-is */ }
+  const candidates = BASE ? [BASE, ''] : [''];
+  for (const base of candidates) {
+    try {
+      const r = await fetch(base + '/api/activity?limit=6', { headers: hdrs() });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const items = d.items || [];
+      if (!items.length) return;
+      stripWrap.style.display = 'block';
+      const newest = items[0].ts || 0;
+      if (newest > lastStripTs) {
+        lastStripTs = newest;
+        stripEl.innerHTML = items.map(stripItem).join('');
+      }
+      if (base !== BASE) { try { localStorage.setItem('vdb_api', base); } catch (_) {} }
+      return;
+    } catch (_) { /* try next candidate */ }
+  }
 }
 setInterval(refreshStrip, 2000);
 refreshStrip();
 
 setStatus('ready');
-fetch(BASE + '/api/status').then(r => r.json()).then(d => {
-  if (d.bridge === 'up') setStatus('bridge up · ' + d.route, true);
-  else setStatus('bridge: ' + (d.bridge || 'unknown'));
-}).catch(() => setStatus('bridge offline'));
+(async function checkBridge() {
+  const candidates = BASE ? [BASE, ''] : [''];
+  for (const base of candidates) {
+    try {
+      const r = await fetch(base + '/api/status', { headers: hdrs() });
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.bridge === 'up') setStatus('bridge up · ' + d.route, true);
+      else setStatus('bridge: ' + (d.bridge || 'unknown'));
+      if (base !== BASE) { try { localStorage.setItem('vdb_api', base); } catch (_) {} }
+      return;
+    } catch (_) { /* try next candidate */ }
+  }
+  setStatus('bridge offline');
+})();
 </script>
 </body></html>
