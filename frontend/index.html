@@ -91,7 +91,7 @@ function addMsg(cls, text) {
   d.textContent = text;
   transcript.prepend(d);
 }
-function esc(s){ return (s == null ? '' : String(s)).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function setStatus(t, live=false) {
   st.textContent = t;
   st.className = 'status' + (live ? ' live' : '');

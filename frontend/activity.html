@@ -59,7 +59,7 @@ function hdrs(extra) { const h = Object.assign({}, extra || {}); if (TOKEN) h['X
 
 const feed = document.getElementById('feed');
 const conn = document.getElementById('conn');
-function esc(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function fmt(ts){
   if (!ts) return '';
   const d = new Date(ts * 1000);
