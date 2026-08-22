@@ -1273,10 +1273,9 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
   pointer-events: none;
 }
 
-.activity-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
-.activity-tab { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
-.activity-tab.active { border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
-.logs-panel { margin-top: 14px; }
+.settings-panel[hidden] { display: none !important; }
+.settings-subtitle { margin: 0 0 8px; font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.settings-logs { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .logs-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .logs-input { flex: 1; min-width: 180px; min-height: 36px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); padding: 0 10px; font: inherit; font-size: 13px; }
 .logs-body { max-height: 62vh; overflow: auto; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
@@ -1383,20 +1382,20 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
   <section class="activity-heading" aria-labelledby="activity-title">
     <h1 id="activity-title">Activity</h1>
   </section>
-  <nav class="activity-tabs" aria-label="Activity views">
-    <button class="activity-tab active" data-tab="feed" aria-selected="true">Feed</button>
-    <button class="activity-tab" data-tab="logs" aria-selected="false">Logs</button>
-  </nav>
   <section class="feed" id="feed" aria-live="polite"><div class="empty-state" id="empty">Waiting for activity...</div></section>
   <nav class="activity-pagination" id="activity-pagination" aria-label="Activity pages"></nav>
-  <section class="logs-panel" id="logs-panel" hidden aria-label="Live logs">
-    <div class="logs-toolbar">
-      <input class="logs-input" id="logs-q" placeholder="filter (hermes, openclaw, asr)" aria-label="Filter logs">
-      <button type="button" class="eyebrow-button logs-btn" id="logs-pause" aria-pressed="false">Pause</button>
-      <button type="button" class="eyebrow-button logs-btn" id="logs-copy">Copy</button>
-      <span class="logs-count" id="logs-count"></span>
+  <section class="settings-panel" id="settings" hidden aria-labelledby="settings-heading">
+    <h2 class="panel-title" id="settings-heading">Settings</h2>
+    <div class="settings-logs" aria-label="Live logs">
+      <h3 class="settings-subtitle">Live logs</h3>
+      <div class="logs-toolbar">
+        <input class="logs-input" id="logs-q" placeholder="filter (hermes, openclaw, asr)" aria-label="Filter logs">
+        <button type="button" class="eyebrow-button logs-btn" id="logs-pause" aria-pressed="false">Pause</button>
+        <button type="button" class="eyebrow-button logs-btn" id="logs-copy">Copy</button>
+        <span class="logs-count" id="logs-count"></span>
+      </div>
+      <pre class="logs-body" id="logs-body" aria-live="polite"></pre>
     </div>
-    <pre class="logs-body" id="logs-body" aria-live="polite"></pre>
   </section>
 </main>
 <footer class="site-footer shell" aria-label="Theme preferences">
@@ -1557,32 +1556,30 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rawModal
 
 let failCount = 0;
 const connDot = document.getElementById('conn-dot');
-const logsPanel = document.getElementById('logs-panel');
+const settingsPanel = document.getElementById('settings');
 const logsBody = document.getElementById('logs-body');
 const logsQ = document.getElementById('logs-q');
 const logsPause = document.getElementById('logs-pause');
 const logsCopy = document.getElementById('logs-copy');
 const logsCount = document.getElementById('logs-count');
-const tabs = document.querySelectorAll('.activity-tab');
-let activeTab = 'feed';
 let logsPaused = false;
 let logsSince = 0;
 let logsTimer = null;
-function switchTab(tab){
-  activeTab = tab;
-  tabs.forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
-  const feedEl = document.getElementById('feed');
-  const pagEl = document.getElementById('activity-pagination');
-  if (tab === 'logs') {
-    feedEl.hidden = true; pagEl.hidden = true; logsPanel.hidden = false;
-    refreshLogs();
-  } else {
-    feedEl.hidden = false; pagEl.hidden = false; logsPanel.hidden = true;
-  }
-  try { localStorage.setItem('vdb_tab', tab); } catch(_){}
+let settingsOpen = false;
+function setSettingsOpen(open){
+  settingsOpen = open;
+  settingsPanel.hidden = !open;
+  document.querySelectorAll('.glass-button.settings-button').forEach(b=>b.setAttribute('aria-expanded', String(open)));
+  if (open) refreshLogs();
+  try { localStorage.setItem('vdb_settings_open', open ? '1' : ''); } catch(_){}
 }
-tabs.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
-try { const savedTab = localStorage.getItem('vdb_tab'); if (savedTab === 'logs') switchTab('logs'); } catch(_){}
+document.querySelectorAll('.glass-button.settings-button').forEach(btn=>{
+  btn.addEventListener('click', (e)=>{
+    // Don't hijack if this is the Talk page's connection-settings toggle (different handler).
+    if (btn.closest('.topbar')) { e.preventDefault(); e.stopImmediatePropagation(); setSettingsOpen(!settingsOpen); }
+  }, true);
+});
+try { if (localStorage.getItem('vdb_settings_open') === '1') setSettingsOpen(true); } catch(_){}
 logsQ.addEventListener('input', () => { logsSince = 0; refreshLogs(); });
 logsPause.addEventListener('click', () => {
   logsPaused = !logsPaused;
@@ -1602,7 +1599,7 @@ function formatLog(ev){
   return `${ts} ${evt} ${fields}`;
 }
 async function refreshLogs(){
-  if (logsPaused || activeTab !== 'logs') return;
+  if (logsPaused || !settingsOpen) return;
   const q = encodeURIComponent((logsQ.value || '').trim());
   const url = (BASE ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (logsSince ? '&since=' + logsSince : '');
   try {
