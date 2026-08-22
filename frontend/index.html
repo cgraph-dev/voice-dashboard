@@ -1696,6 +1696,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <div class="star-button-wrap" id="set-save-mount" aria-label="Save changes"></div>
       <span class="settings-status" id="set-status" role="status"></span>
     </div>
+    <div class="settings-logs" aria-label="Live logs">
+      <h3 class="settings-subtitle" style="margin:14px 0 8px;font-size:13px;font-weight:700;letter-spacing:-.01em;">Live logs</h3>
+      <div class="logs-toolbar" style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+        <input class="logs-input" id="talk-logs-q" placeholder="filter (hermes, openclaw, asr)" aria-label="Filter logs" style="flex:1;min-width:180px;min-height:36px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);padding:0 10px;font:inherit;font-size:13px;">
+        <button type="button" class="eyebrow-button logs-btn" id="talk-logs-copy">Copy</button>
+        <span class="logs-count" id="talk-logs-count" style="color:var(--subtle);font-size:11px;"></span>
+      </div>
+      <pre class="logs-body" id="talk-logs-body" style="max-height:52vh;overflow:auto;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:color-mix(in srgb, var(--surface) 90%, transparent);font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;" aria-live="polite"></pre>
+    </div>
   </section>
 </main>
 
@@ -2019,6 +2028,7 @@ const panel = document.getElementById('settings');
 gear.addEventListener('click', () => {
   const open = panel.classList.toggle('is-open');
   gear.setAttribute('aria-expanded', String(open));
+  if (open && typeof refreshTalkLogs === 'function') { talkLogsSince = 0; refreshTalkLogs(); }
 });
 document.getElementById('set-api').value = localStorage.getItem('vdb_api') || '';
 document.getElementById('set-token').value = localStorage.getItem('vdb_token') || '';
@@ -2029,6 +2039,43 @@ document.getElementById('set-save-mount').addEventListener('click', () => {
   // reload so BASE/API_TOKEN pick up the saved values cleanly
   location.reload();
 });
+// ---- Live logs — Talk page (inside Settings, non-stop while Settings is open) ----
+const talkLogsBody = document.getElementById('talk-logs-body');
+const talkLogsQ = document.getElementById('talk-logs-q');
+const talkLogsCopy = document.getElementById('talk-logs-copy');
+const talkLogsCount = document.getElementById('talk-logs-count');
+let talkLogsSince = 0;
+let talkLogsTimer = null;
+function formatTalkLog(ev){
+  const ts = ev.ts ? new Date(ev.ts*1000).toLocaleTimeString() : '';
+  const evt = ev.event || '?';
+  const rest = Object.assign({}, ev); delete rest.ts; delete rest.event;
+  let fields = '';
+  try { fields = JSON.stringify(rest); if (fields.length > 220) fields = fields.slice(0,220)+'…'; } catch(_){ fields = String(rest); }
+  return `${ts} ${evt} ${fields}`;
+}
+async function refreshTalkLogs(){
+  if (!talkLogsBody || !panel.classList.contains('is-open')) return;
+  const q = encodeURIComponent((talkLogsQ && talkLogsQ.value || '').trim());
+  const url = (typeof BASE !== 'undefined' ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (talkLogsSince ? '&since=' + talkLogsSince : '');
+  try {
+    const r = await fetch(url, { headers: typeof hdrs !== 'undefined' ? hdrs() : {} });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    const items = d.items || [];
+    if (items.length) talkLogsSince = Math.max(...items.map(x=>x.ts||0), talkLogsSince);
+    if (talkLogsBody) talkLogsBody.textContent = items.map(formatTalkLog).join('\n') || '(no logs)';
+    if (talkLogsCount) talkLogsCount.textContent = items.length + ' events';
+  } catch(e) {
+    if (talkLogsBody) talkLogsBody.textContent = 'logs error: ' + String(e.message||e);
+  }
+}
+function startTalkLogsPoll(){ if (talkLogsTimer || !talkLogsBody) return; talkLogsTimer = setInterval(refreshTalkLogs, 1500); }
+talkLogsQ && talkLogsQ.addEventListener('input', () => { talkLogsSince = 0; refreshTalkLogs(); });
+talkLogsCopy && talkLogsCopy.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(talkLogsBody.textContent || ''); talkLogsCopy.textContent='Copied'; setTimeout(()=>talkLogsCopy.textContent='Copy',1200);} catch(_){ talkLogsCopy.textContent='Copy failed'; }
+});
+startTalkLogsPoll();
 
 async function playResult(data) {
   addMsg('user', data.text || '(no speech recognized)');
