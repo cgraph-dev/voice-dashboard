@@ -70,9 +70,8 @@ body {
   min-height: 100vh;
   margin: 0;
   color: var(--text);
-  background:
-    radial-gradient(circle at 86% -14%, rgba(255, 255, 255, .08), transparent 28rem),
-    var(--bg);
+  background-color: var(--bg);
+  background-image: none;
   font: 15px/1.55 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -817,11 +816,26 @@ html[data-theme="dark"] .theme-switcher::before { animation: scale-toggle-dark .
 .b-local { --badge-color: #d2a6ff; }
 .route { color: var(--warning); }
 .activity-text { margin-top: 9px; color: var(--text); white-space: pre-wrap; }
+.activity-label { color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-right: 6px; }
+.activity-text .activity-label { color: #72aaff; }
+.activity-summary .activity-label { color: #b48cff; }
 .activity-summary { margin-top: 10px; padding: 10px 11px; border-radius: 9px; color: var(--muted); background: var(--surface-raised); }
 .activity-error { margin-top: 10px; padding: 10px 11px; border-radius: 9px; color: var(--danger); background: rgba(255, 125, 125, .08); }
 .activity-item details { margin-top: 10px; }
 .activity-item summary { color: var(--subtle); cursor: pointer; font-size: 11px; }
 .activity-raw { max-height: 220px; margin-top: 7px; padding: 10px 11px; overflow: auto; border-radius: 9px; color: var(--muted); background: var(--bg); font-size: 12px; white-space: pre-wrap; }
+.activity-summary.has-raw { cursor: pointer; border: 1px dashed color-mix(in srgb, var(--badge-color, #b48cff) 34%, transparent); transition: border-color .18s ease, background .18s ease, transform .18s ease; }
+.activity-summary.has-raw:hover { border-color: color-mix(in srgb, var(--badge-color, #b48cff) 55%, transparent); background: color-mix(in srgb, var(--badge-color, #b48cff) 10%, var(--surface-raised)); transform: translateY(-1px); }
+.activity-summary-hint { display: inline-block; margin-left: 8px; color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .9; }
+.raw-modal { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.62); backdrop-filter: blur(8px); }
+.raw-modal.open { display: flex; }
+.raw-modal-card { width: min(860px, 96vw); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--surface-raised); box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+.raw-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.raw-modal-title { font-size: 13px; font-weight: 750; letter-spacing: -.02em; }
+.raw-modal-actions { display: flex; gap: 8px; }
+.raw-modal-body { overflow: auto; padding: 14px 16px; color: var(--text); background: var(--surface); font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+.raw-modal-copy { font-size: 12px; }
+
 .empty-state, .error-state { padding: 60px 18px; color: var(--subtle); text-align: center; }
 .error-state { color: var(--danger); }
 
@@ -867,99 +881,93 @@ html[data-theme="dark"] .theme-switcher::before { animation: scale-toggle-dark .
   }
 }
 /* SHARED_UI_STYLES_START */
-/* Shared static equivalent of components/ui/star-button.tsx. */
-.star-button-wrap {
-  position: relative;
-  display: inline-flex;
-  isolation: isolate;
-  transform-style: preserve-3d;
-}
+/* Static fallback for the exact StarButton markup used by the React mount. */
+.star-button-wrap { position: relative; display: inline-flex; isolation: isolate; }
 
-.star-button {
-  --star-light-width: 110px;
-  --star-duration: 3s;
-  --star-light-color: #fafafa;
-  --star-border-width: 1px;
-  --star-background: currentColor;
+.star-button-wrap > [class~="group/star-button"],
+[class~="group/star-button"] {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   display: inline-flex;
   min-height: 40px;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: .5rem;
+  padding: .5rem 1rem;
   overflow: hidden;
   border: 0;
-  border-radius: 999px;
+  border-radius: 1.5rem;
   color: var(--text);
   background: transparent;
   box-shadow: none;
-  font-size: 12px;
-  font-weight: 720;
-  letter-spacing: .01em;
+  font-size: .875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
   white-space: nowrap;
-  transition: transform .4s cubic-bezier(.25, 1, .5, 1), box-shadow .4s cubic-bezier(.25, 1, .5, 1), border-color .4s ease;
+  transition: color .15s ease;
 }
 
-.star-button::before {
-  display: none;
-}
+.star-button-wrap > [class~="group/star-button"]:hover,
+[class~="group/star-button"]:hover { background: transparent; box-shadow: none; }
+.star-button-wrap > [class~="group/star-button"]:active,
+[class~="group/star-button"]:active { transform: none; }
+.star-button-wrap > [class~="group/star-button"]:disabled,
+[class~="group/star-button"]:disabled { pointer-events: none; opacity: .5; }
 
-.star-button::after {
-  display: none;
-}
-
-.star-button-light {
+.star-button-wrap > [class~="group/star-button"] > div:first-child,
+[class~="group/star-button"] > div:first-child {
   position: absolute;
-  z-index: 2;
+  z-index: 1;
   inset: 0;
   aspect-ratio: 1;
-  width: var(--star-light-width);
-  height: auto;
-  background: radial-gradient(ellipse at center, var(--star-light-color), transparent 66%);
-  opacity: .28;
-  offset-path: path('M 0 0 H 120 V 40 H 0 V 0');
+  width: var(--light-width);
+  background: radial-gradient(ellipse at center, var(--light-color), transparent, transparent);
   offset-distance: 0%;
-  animation: star-button-sheen var(--star-duration) cubic-bezier(.16, 1, .3, 1) infinite;
+  animation: star-btn calc(var(--duration) * 1s) linear infinite;
   pointer-events: none;
 }
 
-.star-button-stars {
+.star-button-wrap > [class~="group/star-button"] > div:nth-child(2),
+[class~="group/star-button"] > div:nth-child(2) {
   position: absolute;
   z-index: 4;
   inset: 0;
+  overflow: hidden;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--text) 15%, transparent);
   border-radius: inherit;
-  border: var(--star-border-width) solid color-mix(in srgb, var(--text) 15%, transparent);
-  background: var(--star-background);
-  color: var(--text);
-  opacity: 1;
+  background: currentColor;
+  color: white;
   pointer-events: none;
 }
 
-.star-button-stars svg { display: block; width: 100%; height: 100%; opacity: .9; }
+html[data-theme="dark"] .star-button-wrap > [class~="group/star-button"] > div:nth-child(2),
+html[data-theme="dark"] [class~="group/star-button"] > div:nth-child(2) { color: black; }
 
-.star-button-label {
+.star-button-wrap > [class~="group/star-button"] > div:nth-child(2) svg,
+[class~="group/star-button"] > div:nth-child(2) svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.star-button-wrap > [class~="group/star-button"] > span,
+[class~="group/star-button"] > span {
   position: relative;
   z-index: 10;
   display: inline-block;
   color: transparent;
-  background: linear-gradient(to top, #111, #a3a3a3);
+  background: linear-gradient(to top, #000, #a3a3a3);
   -webkit-background-clip: text;
   background-clip: text;
 }
-html[data-theme="dark"] .star-button-label { background-image: linear-gradient(to top, #fff, #737373); }
-.star-button:hover { background: transparent; box-shadow: none; }
-.star-button:active { transform: none; }
-.star-button:disabled { cursor: wait; opacity: .5; }
 
-@keyframes star-button-sheen {
-  0%, 14% { offset-distance: 0%; }
-  72%, 100% { offset-distance: 100%; }
-}
+html[data-theme="dark"] .star-button-wrap > [class~="group/star-button"] > span,
+html[data-theme="dark"] [class~="group/star-button"] > span { background-image: linear-gradient(to top, #fff, #737373); }
 
-@keyframes star-button-border {
-  to { transform: rotate(360deg); }
+@keyframes star-btn {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Shared RankValut-style eyebrow glass button for icon and compact controls. */
@@ -1018,7 +1026,10 @@ html[data-theme="dark"] .star-button-label { background-image: linear-gradient(t
 .eyebrow-button:disabled { cursor: not-allowed; opacity: .35; }
 
 @media (prefers-reduced-motion: reduce) {
-  .star-button, .star-button::after, .star-button-light, .eyebrow-button, .eyebrow-button::after { animation: none; transition-duration: .01ms; }
+  [class~="group/star-button"],
+  [class~="group/star-button"] > div:first-child,
+  .eyebrow-button,
+  .eyebrow-button::after { animation: none; transition-duration: .01ms; }
 }
 
 /* SHARED_UI_STYLES_END */
@@ -1041,10 +1052,26 @@ html[data-theme="dark"] .star-button-label { background-image: linear-gradient(t
 body {
   position: relative;
   overflow-x: hidden;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: none;
+}
+
+/* The GIF is the only page-level background surface on every route. */
+.gif-background {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: fill;
+  opacity: .34;
+  filter: grayscale(1) contrast(1.08) brightness(.72);
+  pointer-events: none;
+  user-select: none;
 }
 
 .quantum-field {
+  display: none;
   position: fixed;
   z-index: 0;
   inset: 72px 0 0;
@@ -1075,6 +1102,7 @@ html[data-theme="light"] .quantum-field { color: rgba(0, 0, 0, .18); }
 .page-main { padding-top: 78px; }
 
 html[data-theme="light"] body { background-color: var(--bg); }
+html[data-theme="light"] .gif-background { opacity: .14; filter: grayscale(1) contrast(1.02) brightness(1.18); }
 html[data-theme="light"] .topbar { border-color: rgba(157, 178, 199, .72); background: transparent; }
 html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199, .72); background: rgba(248, 251, 255, .72); }
 
@@ -1288,6 +1316,8 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
 
 </style>
 </head><body>
+<!-- QUBIT_BACKGROUND_GIF -->
+<img class="gif-background" aria-hidden="true" alt="" src="/static/Logo/ascii-magic-4.gif" loading="lazy" decoding="async">
 <pre class="quantum-field" aria-hidden="true">      ·          .              ·             .          ·
    .        ~                 .        ~                  .
           /\      ·                 /\        ·
@@ -1305,7 +1335,7 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
 </pre>
 <header class="topbar shell">
   <a class="brand-lockup" href="/" aria-label="Qubit home">
-    <img class="brand-logo brand-logo-light" src="/static/Logo/logoblack.png" alt="">
+    <img class="brand-logo brand-logo-light" src="/static/Logo/logoblack.svg" alt="">
     <img class="brand-logo brand-logo-dark" src="/static/Logo/logowhite.png" alt="">
   </a>
   <nav class="topbar-nav" aria-label="Primary navigation">
@@ -1359,6 +1389,18 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
     </button>
   </div>
 </footer>
+<div class="raw-modal" id="raw-modal" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="raw-modal-card">
+    <div class="raw-modal-head">
+      <div class="raw-modal-title" id="raw-modal-title">Full text</div>
+      <div class="raw-modal-actions">
+        <button type="button" class="eyebrow-button raw-modal-copy" id="raw-modal-copy">Copy</button>
+        <button type="button" class="eyebrow-button" id="raw-modal-close" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <pre class="raw-modal-body" id="raw-modal-body"></pre>
+  </div>
+</div>
 <script>
 const BASE = (new URLSearchParams(location.search).get('api') || localStorage.getItem('vdb_api') || '').replace(/\/$/, '');
 const TOKEN = new URLSearchParams(location.search).get('token') || localStorage.getItem('vdb_token') || '';
@@ -1382,17 +1424,20 @@ function renderPage(){
   activityPage = Math.min(activityPage, pageCount);
   const start = (activityPage - 1) * PAGE_SIZE;
   const items = activityItems.slice(start, start + PAGE_SIZE);
-  feed.innerHTML = items.map(it => {
+  feed.innerHTML = items.map((it, idx) => {
     const kind = String(it.kind || 'status').toLowerCase();
     const badge = `<span class="badge b-${esc(kind)}">${esc(kind)}</span>`;
     const route = it.route ? ` · <span class="route">${esc(it.route)}</span>` : '';
     const conf = it.conf ? ` · <span class="conf">conf ${esc(it.conf)}</span>` : '';
     const lat = it.latency_s != null ? ` · <span class="lat">${esc(it.latency_s)}s</span>` : '';
     const detail = it.detail ? ` · <span class="lat">${esc(it.detail)}</span>` : '';
-    const text = it.text ? `<div class="activity-text">${esc(it.text)}</div>` : '';
-    const summary = it.summary ? `<div class="activity-summary">${esc(it.summary)}</div>` : '';
+    const isConversation = it.detail === 'conversation' && it.summary && it.text && it.text !== 'conversation';
+    const text = it.text ? (isConversation ? `<div class="activity-text"><span class="activity-label">You said:</span> ${esc(it.text)}</div>` : `<div class="activity-text">${esc(it.text)}</div>`) : '';
+    const globalIdx = start + idx;
+    const hasRaw = !!(it.raw && String(it.raw).trim());
+    const summary = it.summary ? `<div class="activity-summary${hasRaw ? ' has-raw' : ''}"${hasRaw ? ` data-raw-idx="${globalIdx}" title="Click to see full text — spoken summary is short, raw is the full output"` : ''}>${isConversation ? '<span class="activity-label">Bot:</span> ' : ''}${esc(it.summary)}${hasRaw ? ' <span class="activity-summary-hint">↗ full text</span>' : ''}</div>` : '';
     const err = it.error ? `<div class="activity-error">${esc(it.error)}</div>` : '';
-    const raw = it.raw ? `<details><summary>raw output</summary><div class="activity-raw">${esc(it.raw)}</div></details>` : '';
+    const raw = hasRaw ? `<details><summary>raw output (${esc(String(it.raw.length))} chars) — also click summary above</summary><div class="activity-raw">${esc(it.raw)}</div></details>` : '';
     return `<article class="activity-item">
       <div class="activity-meta"><span>${fmt(it.ts)}</span>${badge}${route}${conf}${lat}${detail}</div>
       ${text}${summary}${err}${raw}</article>`;
@@ -1421,6 +1466,40 @@ function render(items){
   activityPage = Math.min(activityPage, Math.max(1, Math.ceil(activityItems.length / PAGE_SIZE)));
   renderPage();
 }
+
+// ---- Summary -> full raw modal ----
+const rawModal = document.getElementById('raw-modal');
+const rawModalBody = document.getElementById('raw-modal-body');
+const rawModalTitle = document.getElementById('raw-modal-title');
+const rawModalClose = document.getElementById('raw-modal-close');
+const rawModalCopy = document.getElementById('raw-modal-copy');
+function openRawModal(idx){
+  const it = activityItems[idx];
+  if (!it || !it.raw) return;
+  rawModalTitle.textContent = (it.summary ? 'Full text — ' : '') + (it.route || it.kind || 'raw') + ' · ' + String(it.raw.length) + ' chars';
+  rawModalBody.textContent = it.raw;
+  rawModal.classList.add('open');
+  rawModal.setAttribute('aria-hidden','false');
+  document.body.style.overflow = 'hidden';
+}
+function closeRawModal(){
+  rawModal.classList.remove('open');
+  rawModal.setAttribute('aria-hidden','true');
+  document.body.style.overflow = '';
+}
+feed.addEventListener('click', (e) => {
+  const card = e.target.closest('.activity-summary.has-raw');
+  if (!card) return;
+  const idx = Number(card.getAttribute('data-raw-idx'));
+  if (Number.isFinite(idx)) openRawModal(idx);
+});
+rawModal.addEventListener('click', (e) => { if (e.target === rawModal) closeRawModal(); });
+rawModalClose.addEventListener('click', closeRawModal);
+rawModalCopy.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(rawModalBody.textContent || ''); rawModalCopy.textContent = 'Copied'; setTimeout(()=> rawModalCopy.textContent='Copy', 1200); } catch(_){ rawModalCopy.textContent = 'Copy failed'; }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rawModal.classList.contains('open')) closeRawModal(); });
+
 let failCount = 0;
 const connDot = document.getElementById('conn-dot');
 async function refresh(){

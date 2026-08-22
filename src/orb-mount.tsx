@@ -53,5 +53,16 @@ if (mount) createRoot(mount).render(<OrbMount />)
 
 const saveMount = document.getElementById("set-save-mount")
 if (saveMount) {
-  createRoot(saveMount).render(<StarButton>Save changes</StarButton>)
+  createRoot(saveMount).render(
+    <StarButton
+      lightWidth={110}
+      duration={3}
+      lightColor="#FAFAFA"
+      backgroundColor="currentColor"
+      borderWidth={2}
+      className="rounded-3xl"
+    >
+      Save changes
+    </StarButton>,
+  )
 }

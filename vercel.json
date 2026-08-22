@@ -2,7 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/", "destination": "/index.html" },
-    { "source": "/activity", "destination": "/activity.html" }
-  ]
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/activity",
+      "destination": "/activity.html"
+    }
+  ],
+  "buildCommand": "INLINE_GIF=1 node scripts/inline-background.mjs"
 }
