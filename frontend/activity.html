@@ -1273,6 +1273,15 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
   pointer-events: none;
 }
 
+.activity-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.activity-tab { min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.activity-tab.active { border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.logs-panel { margin-top: 14px; }
+.logs-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.logs-input { flex: 1; min-width: 180px; min-height: 36px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); padding: 0 10px; font: inherit; font-size: 13px; }
+.logs-body { max-height: 62vh; overflow: auto; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 90%, transparent); font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+.logs-count { color: var(--subtle); font-size: 11px; }
+
 .activity-item > * { position: relative; z-index: 1; }
 
 /* Keep feed cards on a stable compositor layer. Hover only changes the edge;
@@ -1374,8 +1383,21 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
   <section class="activity-heading" aria-labelledby="activity-title">
     <h1 id="activity-title">Activity</h1>
   </section>
+  <nav class="activity-tabs" aria-label="Activity views">
+    <button class="activity-tab active" data-tab="feed" aria-selected="true">Feed</button>
+    <button class="activity-tab" data-tab="logs" aria-selected="false">Logs</button>
+  </nav>
   <section class="feed" id="feed" aria-live="polite"><div class="empty-state" id="empty">Waiting for activity...</div></section>
   <nav class="activity-pagination" id="activity-pagination" aria-label="Activity pages"></nav>
+  <section class="logs-panel" id="logs-panel" hidden aria-label="Live logs">
+    <div class="logs-toolbar">
+      <input class="logs-input" id="logs-q" placeholder="filter (hermes, openclaw, asr)" aria-label="Filter logs">
+      <button type="button" class="eyebrow-button logs-btn" id="logs-pause" aria-pressed="false">Pause</button>
+      <button type="button" class="eyebrow-button logs-btn" id="logs-copy">Copy</button>
+      <span class="logs-count" id="logs-count"></span>
+    </div>
+    <pre class="logs-body" id="logs-body" aria-live="polite"></pre>
+  </section>
 </main>
 <footer class="site-footer shell" aria-label="Theme preferences">
   <div class="theme-switcher" role="group" aria-label="Theme">
@@ -1473,11 +1495,26 @@ const rawModalBody = document.getElementById('raw-modal-body');
 const rawModalTitle = document.getElementById('raw-modal-title');
 const rawModalClose = document.getElementById('raw-modal-close');
 const rawModalCopy = document.getElementById('raw-modal-copy');
-function openRawModal(idx){
+async function openRawModal(idx){
   const it = activityItems[idx];
-  if (!it || !it.raw) return;
-  rawModalTitle.textContent = (it.summary ? 'Full text — ' : '') + (it.route || it.kind || 'raw') + ' · ' + String(it.raw.length) + ' chars';
-  rawModalBody.textContent = it.raw;
+  if (!it) return;
+  // If the item was loaded via feed without raw (truncated history), fetch full via /api/item/:id
+  let raw = it.raw;
+  let fullItem = it;
+  if ((!raw || !String(raw).trim()) && it.id) {
+    try {
+      const r = await fetch((BASE ? BASE : '') + '/api/item/' + it.id, { headers: hdrs() });
+      if (r.ok) fullItem = await r.json();
+      raw = fullItem.raw || it.raw;
+    } catch (_) {}
+  }
+  if (!raw || !String(raw).trim()) {
+    // Fallback: show summary/detail as raw when no dedicated raw exists
+    raw = [fullItem.summary || it.summary, fullItem.text || it.text, fullItem.detail || it.detail].filter(Boolean).join('\n\n');
+  }
+  rawModalTitle.textContent = (it.summary ? 'Full text — ' : '') + (it.route || it.kind || 'raw') + ' · ' + String(String(raw).length) + ' chars';
+  rawModalBody.textContent = raw;
+  rawModal.dataset.fullItem = JSON.stringify(fullItem);
   rawModal.classList.add('open');
   rawModal.setAttribute('aria-hidden','false');
   document.body.style.overflow = 'hidden';
@@ -1486,12 +1523,30 @@ function closeRawModal(){
   rawModal.classList.remove('open');
   rawModal.setAttribute('aria-hidden','true');
   document.body.style.overflow = '';
+  delete rawModal.dataset.fullItem;
 }
 feed.addEventListener('click', (e) => {
   const card = e.target.closest('.activity-summary.has-raw');
-  if (!card) return;
-  const idx = Number(card.getAttribute('data-raw-idx'));
-  if (Number.isFinite(idx)) openRawModal(idx);
+  if (card) {
+    const idx = Number(card.getAttribute('data-raw-idx'));
+    if (Number.isFinite(idx)) openRawModal(idx);
+    return;
+  }
+  // Allow clicking any summary card to see full report (summary + text + detail + fetched raw)
+  const anyCard = e.target.closest('.activity-summary');
+  if (anyCard) {
+    // Find index by DOM order fallback
+    const all = Array.from(feed.querySelectorAll('.activity-summary'));
+    const pos = all.indexOf(anyCard);
+    if (pos >= 0) {
+      // Map visible page cards back to global index
+      const visibleCards = feed.querySelectorAll('.activity-item');
+      // Simpler: use clicked card's data or find by text
+      const summaryText = anyCard.textContent || '';
+      const idx = activityItems.findIndex(it => it.summary && summaryText.includes(String(it.summary).slice(0, 24)));
+      if (idx >= 0) openRawModal(idx);
+    }
+  }
 });
 rawModal.addEventListener('click', (e) => { if (e.target === rawModal) closeRawModal(); });
 rawModalClose.addEventListener('click', closeRawModal);
@@ -1502,6 +1557,68 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rawModal
 
 let failCount = 0;
 const connDot = document.getElementById('conn-dot');
+const logsPanel = document.getElementById('logs-panel');
+const logsBody = document.getElementById('logs-body');
+const logsQ = document.getElementById('logs-q');
+const logsPause = document.getElementById('logs-pause');
+const logsCopy = document.getElementById('logs-copy');
+const logsCount = document.getElementById('logs-count');
+const tabs = document.querySelectorAll('.activity-tab');
+let activeTab = 'feed';
+let logsPaused = false;
+let logsSince = 0;
+let logsTimer = null;
+function switchTab(tab){
+  activeTab = tab;
+  tabs.forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
+  const feedEl = document.getElementById('feed');
+  const pagEl = document.getElementById('activity-pagination');
+  if (tab === 'logs') {
+    feedEl.hidden = true; pagEl.hidden = true; logsPanel.hidden = false;
+    refreshLogs();
+  } else {
+    feedEl.hidden = false; pagEl.hidden = false; logsPanel.hidden = true;
+  }
+  try { localStorage.setItem('vdb_tab', tab); } catch(_){}
+}
+tabs.forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+try { const savedTab = localStorage.getItem('vdb_tab'); if (savedTab === 'logs') switchTab('logs'); } catch(_){}
+logsQ.addEventListener('input', () => { logsSince = 0; refreshLogs(); });
+logsPause.addEventListener('click', () => {
+  logsPaused = !logsPaused;
+  logsPause.setAttribute('aria-pressed', String(logsPaused));
+  logsPause.textContent = logsPaused ? 'Resume' : 'Pause';
+  if (!logsPaused) refreshLogs();
+});
+logsCopy.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(logsBody.textContent || ''); logsCopy.textContent='Copied'; setTimeout(()=>logsCopy.textContent='Copy',1200);} catch(_){ logsCopy.textContent='Copy failed'; }
+});
+function formatLog(ev){
+  const ts = ev.ts ? new Date(ev.ts*1000).toLocaleTimeString() : '';
+  const evt = ev.event || '?';
+  const rest = Object.assign({}, ev); delete rest.ts; delete rest.event;
+  let fields = '';
+  try { fields = JSON.stringify(rest); if (fields.length > 220) fields = fields.slice(0,220)+'…'; } catch(_){ fields = String(rest); }
+  return `${ts} ${evt} ${fields}`;
+}
+async function refreshLogs(){
+  if (logsPaused || activeTab !== 'logs') return;
+  const q = encodeURIComponent((logsQ.value || '').trim());
+  const url = (BASE ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (logsSince ? '&since=' + logsSince : '');
+  try {
+    const r = await fetch(url, { headers: hdrs() });
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    const items = d.items || [];
+    if (items.length) logsSince = Math.max(...items.map(x=>x.ts||0), logsSince);
+    logsBody.textContent = items.map(formatLog).join('\n') || '(no logs)';
+    logsCount.textContent = items.length + ' events';
+  } catch(e) {
+    logsBody.textContent = 'logs error: ' + String(e.message||e);
+  }
+}
+function startLogsPoll(){ if (logsTimer) return; logsTimer = setInterval(refreshLogs, 1500); }
+startLogsPoll();
 async function refresh(){
   // If a saved/query API URL exists but fails (stale tunnel URL after Pinggy
   // rotated it), fall back to same-origin automatically so the page always
