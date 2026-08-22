@@ -1568,7 +1568,7 @@ function setSettingsOpen(open){
   settingsPanel.hidden = !open;
   settingsPanel.classList.toggle('is-open', open);
   document.querySelectorAll('.glass-button.settings-button').forEach(b=>b.setAttribute('aria-expanded', String(open)));
-  if (open) { logsSince = 0; refreshLogs(); }
+  if (open) { logsSince = 0; logsBuffer = []; refreshLogs(); }
   try { localStorage.setItem('vdb_settings_open', open ? '1' : ''); } catch(_){}
 }
 document.querySelectorAll('.glass-button.settings-button').forEach(btn=>{
@@ -1579,7 +1579,7 @@ document.querySelectorAll('.glass-button.settings-button').forEach(btn=>{
   });
 });
 try { if (localStorage.getItem('vdb_settings_open') === '1') setSettingsOpen(true); } catch(_){}
-logsQ.addEventListener('input', () => { logsSince = 0; refreshLogs(); });
+logsQ.addEventListener('input', () => { logsSince = 0; logsBuffer = []; refreshLogs(); });
 logsCopy.addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(logsBody.textContent || ''); logsCopy.textContent='Copied'; setTimeout(()=>logsCopy.textContent='Copy',1200);} catch(_){ logsCopy.textContent='Copy failed'; }
 });
@@ -1591,20 +1591,44 @@ function formatLog(ev){
   try { fields = JSON.stringify(rest); if (fields.length > 220) fields = fields.slice(0,220)+'…'; } catch(_){ fields = String(rest); }
   return `${ts} ${evt} ${fields}`;
 }
+// Cumulative logs buffer — keeps tracking non-stop while Settings is open.
+// Each poll fetches only new events (since logsSince), then APPENDS them to the
+// buffer. The panel only ever grows/shrinks via the filter `q`; it never blanks
+// to "(no logs)" on an empty poll (that was the vanishing bug).
+let logsBuffer = [];
 async function refreshLogs(){
   if (!settingsOpen) return;
   const q = encodeURIComponent((logsQ.value || '').trim());
-  const url = (BASE ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (logsSince ? '&since=' + logsSince : '');
+  const hasFilter = !!(logsQ.value || '').trim();
+  // With a filter, just show last 200 matching (no incremental since).
+  const url = (BASE ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (!hasFilter && logsSince ? '&since=' + logsSince : '');
   try {
     const r = await fetch(url, { headers: hdrs() });
     if (!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
     const items = d.items || [];
-    if (items.length) logsSince = Math.max(...items.map(x=>x.ts||0), logsSince);
-    logsBody.textContent = items.map(formatLog).join('\n') || '(no logs)';
-    logsCount.textContent = items.length + ' events';
+    if (!hasFilter) {
+      if (items.length) {
+        logsSince = Math.max(...items.map(x=>x.ts||0), logsSince);
+        logsBuffer.push(...items);
+        if (logsBuffer.length > 400) logsBuffer = logsBuffer.slice(-400);
+      }
+      if (logsBuffer.length === 0 && items.length === 0 && !logsBody.textContent) {
+        logsBody.textContent = '(no logs)';
+        logsCount.textContent = '0 events';
+        return;
+      }
+      if (logsBuffer.length) {
+        logsBody.textContent = logsBuffer.map(formatLog).join('\n');
+        logsCount.textContent = logsBuffer.length + ' events';
+      }
+    } else {
+      logsBody.textContent = items.map(formatLog).join('\n') || '(no logs)';
+      logsCount.textContent = items.length + ' events';
+    }
   } catch(e) {
-    logsBody.textContent = 'logs error: ' + String(e.message||e);
+    // Do not blank the buffer on error — keep what we had.
+    if (!logsBuffer.length) logsBody.textContent = 'logs error: ' + String(e.message||e);
   }
 }
 function startLogsPoll(){ if (logsTimer) return; logsTimer = setInterval(refreshLogs, 1500); }

@@ -2028,7 +2028,7 @@ const panel = document.getElementById('settings');
 gear.addEventListener('click', () => {
   const open = panel.classList.toggle('is-open');
   gear.setAttribute('aria-expanded', String(open));
-  if (open && typeof refreshTalkLogs === 'function') { talkLogsSince = 0; refreshTalkLogs(); }
+  if (open && typeof refreshTalkLogs === 'function') { talkLogsSince = 0; talkLogsBuffer = []; refreshTalkLogs(); }
 });
 document.getElementById('set-api').value = localStorage.getItem('vdb_api') || '';
 document.getElementById('set-token').value = localStorage.getItem('vdb_token') || '';
@@ -2054,24 +2054,42 @@ function formatTalkLog(ev){
   try { fields = JSON.stringify(rest); if (fields.length > 220) fields = fields.slice(0,220)+'…'; } catch(_){ fields = String(rest); }
   return `${ts} ${evt} ${fields}`;
 }
+let talkLogsBuffer = [];
 async function refreshTalkLogs(){
   if (!talkLogsBody || !panel.classList.contains('is-open')) return;
   const q = encodeURIComponent((talkLogsQ && talkLogsQ.value || '').trim());
-  const url = (typeof BASE !== 'undefined' ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (talkLogsSince ? '&since=' + talkLogsSince : '');
+  const hasFilter = !!(talkLogsQ && talkLogsQ.value || '').trim();
+  const url = (typeof BASE !== 'undefined' ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (!hasFilter && talkLogsSince ? '&since=' + talkLogsSince : '');
   try {
     const r = await fetch(url, { headers: typeof hdrs !== 'undefined' ? hdrs() : {} });
     if (!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
     const items = d.items || [];
-    if (items.length) talkLogsSince = Math.max(...items.map(x=>x.ts||0), talkLogsSince);
-    if (talkLogsBody) talkLogsBody.textContent = items.map(formatTalkLog).join('\n') || '(no logs)';
-    if (talkLogsCount) talkLogsCount.textContent = items.length + ' events';
+    if (!hasFilter) {
+      if (items.length) {
+        talkLogsSince = Math.max(...items.map(x=>x.ts||0), talkLogsSince);
+        talkLogsBuffer.push(...items);
+        if (talkLogsBuffer.length > 400) talkLogsBuffer = talkLogsBuffer.slice(-400);
+      }
+      if (talkLogsBuffer.length === 0 && items.length === 0 && !talkLogsBody.textContent) {
+        talkLogsBody.textContent = '(no logs)';
+        if (talkLogsCount) talkLogsCount.textContent = '0 events';
+        return;
+      }
+      if (talkLogsBuffer.length) {
+        talkLogsBody.textContent = talkLogsBuffer.map(formatTalkLog).join('\n');
+        if (talkLogsCount) talkLogsCount.textContent = talkLogsBuffer.length + ' events';
+      }
+    } else {
+      if (talkLogsBody) talkLogsBody.textContent = items.map(formatTalkLog).join('\n') || '(no logs)';
+      if (talkLogsCount) talkLogsCount.textContent = items.length + ' events';
+    }
   } catch(e) {
-    if (talkLogsBody) talkLogsBody.textContent = 'logs error: ' + String(e.message||e);
+    if (!talkLogsBuffer.length && talkLogsBody) talkLogsBody.textContent = 'logs error: ' + String(e.message||e);
   }
 }
 function startTalkLogsPoll(){ if (talkLogsTimer || !talkLogsBody) return; talkLogsTimer = setInterval(refreshTalkLogs, 1500); }
-talkLogsQ && talkLogsQ.addEventListener('input', () => { talkLogsSince = 0; refreshTalkLogs(); });
+talkLogsQ && talkLogsQ.addEventListener('input', () => { talkLogsSince = 0; talkLogsBuffer = []; refreshTalkLogs(); });
 talkLogsCopy && talkLogsCopy.addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(talkLogsBody.textContent || ''); talkLogsCopy.textContent='Copied'; setTimeout(()=>talkLogsCopy.textContent='Copy',1200);} catch(_){ talkLogsCopy.textContent='Copy failed'; }
 });
