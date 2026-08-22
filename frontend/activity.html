@@ -1575,9 +1575,10 @@ function setSettingsOpen(open){
 }
 document.querySelectorAll('.glass-button.settings-button').forEach(btn=>{
   btn.addEventListener('click', (e)=>{
-    // Don't hijack if this is the Talk page's connection-settings toggle (different handler).
-    if (btn.closest('.topbar')) { e.preventDefault(); e.stopImmediatePropagation(); setSettingsOpen(!settingsOpen); }
-  }, true);
+    e.preventDefault();
+    e.stopPropagation();
+    setSettingsOpen(!settingsOpen);
+  });
 });
 try { if (localStorage.getItem('vdb_settings_open') === '1') setSettingsOpen(true); } catch(_){}
 logsQ.addEventListener('input', () => { logsSince = 0; refreshLogs(); });
