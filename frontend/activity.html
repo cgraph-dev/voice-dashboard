@@ -1390,7 +1390,6 @@ html[data-theme="light"] .conversation-panel { border-color: rgba(157, 178, 199,
       <h3 class="settings-subtitle">Live logs</h3>
       <div class="logs-toolbar">
         <input class="logs-input" id="logs-q" placeholder="filter (hermes, openclaw, asr)" aria-label="Filter logs">
-        <button type="button" class="eyebrow-button logs-btn" id="logs-pause" aria-pressed="false">Pause</button>
         <button type="button" class="eyebrow-button logs-btn" id="logs-copy">Copy</button>
         <span class="logs-count" id="logs-count"></span>
       </div>
@@ -1559,18 +1558,17 @@ const connDot = document.getElementById('conn-dot');
 const settingsPanel = document.getElementById('settings');
 const logsBody = document.getElementById('logs-body');
 const logsQ = document.getElementById('logs-q');
-const logsPause = document.getElementById('logs-pause');
 const logsCopy = document.getElementById('logs-copy');
 const logsCount = document.getElementById('logs-count');
-let logsPaused = false;
 let logsSince = 0;
 let logsTimer = null;
 let settingsOpen = false;
 function setSettingsOpen(open){
   settingsOpen = open;
   settingsPanel.hidden = !open;
+  settingsPanel.classList.toggle('is-open', open);
   document.querySelectorAll('.glass-button.settings-button').forEach(b=>b.setAttribute('aria-expanded', String(open)));
-  if (open) refreshLogs();
+  if (open) { logsSince = 0; refreshLogs(); }
   try { localStorage.setItem('vdb_settings_open', open ? '1' : ''); } catch(_){}
 }
 document.querySelectorAll('.glass-button.settings-button').forEach(btn=>{
@@ -1582,12 +1580,6 @@ document.querySelectorAll('.glass-button.settings-button').forEach(btn=>{
 });
 try { if (localStorage.getItem('vdb_settings_open') === '1') setSettingsOpen(true); } catch(_){}
 logsQ.addEventListener('input', () => { logsSince = 0; refreshLogs(); });
-logsPause.addEventListener('click', () => {
-  logsPaused = !logsPaused;
-  logsPause.setAttribute('aria-pressed', String(logsPaused));
-  logsPause.textContent = logsPaused ? 'Resume' : 'Pause';
-  if (!logsPaused) refreshLogs();
-});
 logsCopy.addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(logsBody.textContent || ''); logsCopy.textContent='Copied'; setTimeout(()=>logsCopy.textContent='Copy',1200);} catch(_){ logsCopy.textContent='Copy failed'; }
 });
@@ -1600,7 +1592,7 @@ function formatLog(ev){
   return `${ts} ${evt} ${fields}`;
 }
 async function refreshLogs(){
-  if (logsPaused || !settingsOpen) return;
+  if (!settingsOpen) return;
   const q = encodeURIComponent((logsQ.value || '').trim());
   const url = (BASE ? BASE : '') + '/api/logs?limit=200' + (q ? '&q=' + q : '') + (logsSince ? '&since=' + logsSince : '');
   try {
