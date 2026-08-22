@@ -7,7 +7,7 @@ The web UI for your OpenClaw voice bridge. Two pages:
   (ASR → routing → local 3B summary → TTS); the browser only records mic
   audio and plays the reply back.
 - **`frontend/activity.html`** — the activity dashboard: live feed of what
-  the agent did (recognized text, routing decision, status, the final
+  the assistant did (recognized text, routing decision, status, the final
   spoken summary, latency, raw tool output behind each summary).
 
 The pages are **static** — no build step, no framework. Edit the HTML/CSS/JS

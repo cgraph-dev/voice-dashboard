@@ -1,0 +1,153 @@
+/* Shared static equivalent of components/ui/star-button.tsx. */
+.star-button-wrap {
+  position: relative;
+  display: inline-flex;
+  isolation: isolate;
+  transform-style: preserve-3d;
+}
+
+.star-button {
+  --star-light-width: 110px;
+  --star-duration: 3s;
+  --star-light-color: #fafafa;
+  --star-border-width: 1px;
+  --star-background: currentColor;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  transition: transform .4s cubic-bezier(.25, 1, .5, 1), box-shadow .4s cubic-bezier(.25, 1, .5, 1), border-color .4s ease;
+}
+
+.star-button::before {
+  display: none;
+}
+
+.star-button::after {
+  display: none;
+}
+
+.star-button-light {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  aspect-ratio: 1;
+  width: var(--star-light-width);
+  height: auto;
+  background: radial-gradient(ellipse at center, var(--star-light-color), transparent 66%);
+  opacity: .28;
+  offset-path: path('M 0 0 H 120 V 40 H 0 V 0');
+  offset-distance: 0%;
+  animation: star-button-sheen var(--star-duration) cubic-bezier(.16, 1, .3, 1) infinite;
+  pointer-events: none;
+}
+
+.star-button-stars {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  border-radius: inherit;
+  border: var(--star-border-width) solid color-mix(in srgb, var(--text) 15%, transparent);
+  background: var(--star-background);
+  color: var(--text);
+  opacity: 1;
+  pointer-events: none;
+}
+
+.star-button-stars svg { display: block; width: 100%; height: 100%; opacity: .9; }
+
+.star-button-label {
+  position: relative;
+  z-index: 10;
+  display: inline-block;
+  color: transparent;
+  background: linear-gradient(to top, #111, #a3a3a3);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+html[data-theme="dark"] .star-button-label { background-image: linear-gradient(to top, #fff, #737373); }
+.star-button:hover { background: transparent; box-shadow: none; }
+.star-button:active { transform: none; }
+.star-button:disabled { cursor: wait; opacity: .5; }
+
+@keyframes star-button-sheen {
+  0%, 14% { offset-distance: 0%; }
+  72%, 100% { offset-distance: 100%; }
+}
+
+@keyframes star-button-border {
+  to { transform: rotate(360deg); }
+}
+
+/* Shared RankValut-style eyebrow glass button for icon and compact controls. */
+.eyebrow-button {
+  position: relative;
+  display: inline-grid;
+  min-width: 34px;
+  height: 34px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--text) 22%, transparent);
+  border-radius: 999px;
+  color: color-mix(in oklab, var(--text) 88%, transparent);
+  background: linear-gradient(-75deg, color-mix(in oklab, var(--bg) 5%, transparent), color-mix(in oklab, var(--bg) 20%, transparent), color-mix(in oklab, var(--bg) 5%, transparent));
+  box-shadow: inset 0 .125em .125em color-mix(in oklab, var(--text) 5%, transparent), inset 0 -.125em .125em color-mix(in oklab, var(--bg) 50%, transparent), 0 .25em .125em -.125em color-mix(in oklab, var(--text) 20%, transparent), 0 0 .1em .25em inset color-mix(in oklab, var(--bg) 20%, transparent);
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1;
+  transition: transform .4s cubic-bezier(.25, 1, .5, 1), background .4s cubic-bezier(.25, 1, .5, 1), box-shadow .4s cubic-bezier(.25, 1, .5, 1), color .4s ease;
+}
+
+.eyebrow-button::before {
+  position: absolute;
+  z-index: 1;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, transparent 38%, color-mix(in oklab, var(--bg) 50%, transparent) 48% 52%, transparent 62%);
+  background-size: 200% 200%;
+  content: "";
+  mix-blend-mode: screen;
+  transition: background-position .5s cubic-bezier(.25, 1, .5, 1);
+  pointer-events: none;
+}
+
+.eyebrow-button::after {
+  position: absolute;
+  z-index: 2;
+  inset: -1px;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  background: conic-gradient(from -45deg at 50% 50%, color-mix(in oklab, var(--text) 50%, transparent), transparent 5% 40%, color-mix(in oklab, var(--text) 50%, transparent) 50%, transparent 60% 95%, color-mix(in oklab, var(--text) 50%, transparent)) border-box;
+  content: "";
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  transition: transform .5s ease;
+  pointer-events: none;
+}
+
+.eyebrow-button:hover { color: var(--text); transform: scale(.975); box-shadow: inset 0 .125em .125em color-mix(in oklab, var(--text) 5%, transparent), inset 0 -.125em .125em color-mix(in oklab, var(--bg) 50%, transparent), 0 .15em .05em -.1em color-mix(in oklab, var(--text) 25%, transparent), 0 0 .05em .1em inset color-mix(in oklab, var(--bg) 50%, transparent); }
+.eyebrow-button:hover::before { background-position: 25%; }
+.eyebrow-button:hover::after { transform: rotate(-80deg); }
+.eyebrow-button:active { transform: scale(.94) rotateX(20deg); }
+.eyebrow-button[aria-current="page"] { color: var(--text); border-color: color-mix(in oklab, var(--text) 58%, transparent); }
+.eyebrow-button:disabled { cursor: not-allowed; opacity: .35; }
+
+@media (prefers-reduced-motion: reduce) {
+  .star-button, .star-button::after, .star-button-light, .eyebrow-button, .eyebrow-button::after { animation: none; transition-duration: .01ms; }
+}
