@@ -2451,6 +2451,28 @@ function addHistoryTurn(item) {
 
   const actions = document.createElement('div');
   actions.className = 'history-turn-actions';
+  // CLHF feedback: rate this answer -> the agent learns and never repeats a mistake.
+  const fb = (kind) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'history-turn-action';
+    b.textContent = kind === 'good' ? '👍' : '👎';
+    b.title = kind === 'good' ? 'Good answer — keep it' : 'Wrong — fix it';
+    b.dataset.fb = kind;
+    b.addEventListener('click', async () => {
+      try {
+        await fetch(BASE + '/api/feedback', {
+          method: 'POST',
+          headers: hdrs({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ feedback: kind, user: item.text || '', answer: item.summary || item.reply || '' }),
+        });
+        b.textContent = kind === 'good' ? '✓' : '✗';
+        b.disabled = true;
+      } catch (_) {}
+    });
+    return b;
+  };
+  actions.append(fb('good'), fb('bad'));
   if (id != null) {
     const report = document.createElement('a');
     report.className = 'history-turn-action';
