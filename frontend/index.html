@@ -3203,6 +3203,48 @@ async function loadConversationHistory() {
 }
 loadConversationHistory();
 
+// ---- LIVE conversation history: mic/Right-Ctrl turns must appear without a
+// refresh (web-voice turns already render locally; this covers every source).
+let lastHistoryTs = 0;
+let liveHistBase = null;
+async function pollConversationLive() {
+  const base = liveHistBase !== null ? liveHistBase : (BASE || '');
+  try {
+    const r = await fetch(base + '/api/activity?limit=36', { headers: hdrs() });
+    if (!r.ok) return;
+    const data = await r.json();
+    liveHistBase = base;
+    const items = (data.items || []);
+    // newest first -> find conversation turns we haven't rendered yet
+    let newest = lastHistoryTs;
+    for (const item of items) {
+      const ts = Number(item.ts || 0);
+      if (!ts) continue;
+      if (ts > newest) newest = ts;
+      if (lastHistoryTs && ts <= lastHistoryTs) continue;   // already seen
+      const detail = String(item.detail || '').toLowerCase();
+      const kind = String(item.kind || '').toLowerCase();
+      const isTurn = Boolean(item.text && (item.summary || item.response || item.reply)
+        && item.text !== 'conversation'
+        && (detail === 'conversation' || kind === 'summary' || kind === 'conversation'));
+      if (!isTurn) continue;
+      // skip the turn this page itself just rendered (avoid double-add)
+      addHistoryTurn(item);
+    }
+    lastHistoryTs = newest || lastHistoryTs;
+  } catch (_) { /* bridge offline — retry next tick */ }
+}
+setInterval(pollConversationLive, 2000);
+// seed the watermark after the initial load completes
+setTimeout(async () => {
+  try {
+    const r = await fetch((BASE || '') + '/api/activity?limit=1', { headers: hdrs() });
+    const d = await r.json();
+    const it = (d.items || [])[0];
+    if (it && it.ts) lastHistoryTs = Number(it.ts);
+  } catch (_) {}
+}, 1200);
+
 setStatus('ready');
 (async function checkBridge() {
   const candidates = BASE ? [BASE, ''] : [''];
