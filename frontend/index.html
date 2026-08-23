@@ -2314,8 +2314,10 @@ const transcript = document.getElementById('transcript');
 let ctx=null, source=null, processor=null, chunks=[], recording=false, busy=false;
 let micStream=null;  // the getUserMedia stream — MUST be stopped on release to avoid re-tap freezes
 let micBusy=false;   // a getUserMedia() is in flight (debounce rapid start/close/start)
+let pendingToggle=false; // a tap arrived while getUserMedia was pending -> toggle OFF when ready
 let pushMode = 'hold';  // 'hold' = press-and-hold, 'tap' = one-tap toggle
 let currentAudio = null;  // track TTS audio so orb tap can interrupt
+let playToken = 0;        // generation counter: bump to abort any in-flight audio await
 let tapTimer = null;      // double-tap detection on mobile
 
 function reportHref(id) {
@@ -2515,6 +2517,12 @@ async function startRec() {
     recording = true;
     setStatus('listening…', true);
     updatePttUI();
+    // a second tap arrived while we were starting -> the user wants it OFF
+    if (pendingToggle) {
+      pendingToggle = false;
+      // release immediately (short audio is discarded by stopRec's <0.1s guard)
+      stopRec();
+    }
   } catch (err) {
     addMsg('err', 'Mic error: ' + err.message);
     setStatus('mic error');
@@ -2562,20 +2570,9 @@ async function sendAudio(pcm) {
     const data = await res.json();
     rid = data.request_id;
     setStatus('working…', true);
-    // 2. poll the result until done
-    let pollN = 0;
-    while (true) {
-      await new Promise(r => setTimeout(r, pollN++ < 2 ? 320 : 900));
-      const r = await fetch(BASE + '/api/result/' + rid);
-      const poll = await r.json();
-      if (poll.status === 'done') {
-        await playResult(poll);
-        break;
-      } else if (poll.status === 'unknown') {
-        addMsg('err', 'Request lost (bridge restarted?). Try again.');
-        break;
-      }
-    }
+    // 2. poll the result until done (capped + always settles so the orb can't freeze)
+    const out = await pollResult(rid);
+    if (out) await playResult(out);
   } catch (err) {
     addMsg('err', 'Request failed: ' + err.message);
     setStatus('error');
@@ -2584,6 +2581,35 @@ async function sendAudio(pcm) {
     ptt.disabled = false;
     updatePttUI();
   }
+}
+
+// Poll /api/result/<rid> until done, an error, or a hard cap (never hangs).
+// Each fetch has its own timeout; returns the result object or null.
+async function pollResult(rid, maxMs = 12 * 60 * 1000) {
+  let pollN = 0;
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    // abort a stalled fetch so a wedged bridge can't freeze the orb
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 12000);
+    try {
+      const r = await fetch(BASE + '/api/result/' + rid, { signal: ac.signal });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const poll = await r.json();
+      if (poll.status === 'done') return poll;
+      if (poll.status === 'unknown') { addMsg('err', 'Request lost (bridge restarted?). Try again.'); return null; }
+    } catch (err) {
+      if (err && err.name === 'AbortError') { addMsg('err', 'Bridge response timed out. Try again.'); return null; }
+      console.error('poll error', err);
+      await new Promise(s => setTimeout(s, 900));
+      continue;
+    } finally {
+      clearTimeout(timer);
+    }
+    await new Promise(s => setTimeout(s, pollN++ < 2 ? 320 : 900));
+  }
+  addMsg('err', 'Took too long — stopped waiting.');
+  return null;
 }
 
 // ---- settings (API base + token for Vercel -> PC tunnel) ----
@@ -2680,11 +2706,24 @@ async function playResult(data) {
     addMsg('user', resultText, { itemId: resultItemId });
   }
   if (data.audio_b64) {
-    currentAudio = new Audio('data:audio/wav;base64,' + data.audio_b64);
+    const myToken = ++playToken;
+    const audio = new Audio('data:audio/wav;base64,' + data.audio_b64);
+    currentAudio = audio;
     setStatus('speaking…', true);
-    await currentAudio.play();
-    await new Promise(r => currentAudio.onended = r);
-    currentAudio = null;
+    // Guarded await: always settles (ended OR play error OR a newer token /
+    // interrupt bumped playToken). Prevents the orb freezing when pause() is
+    // called mid-play (pause() never fires 'ended').
+    await new Promise((resolve) => {
+      const done = () => { if (currentAudio === audio) currentAudio = null; resolve(); };
+      audio.addEventListener('ended', done, { once: true });
+      audio.addEventListener('error', done, { once: true });
+      // if interrupted/generation changed while playing, settle immediately
+      const check = setInterval(() => {
+        if (playToken !== myToken || currentAudio !== audio) { clearInterval(check); done(); }
+      }, 60);
+      audio.addEventListener('ended', () => clearInterval(check), { once: true });
+      audio.play().catch(done);
+    });
     setStatus(data.awaiting_input ? 'waiting for your answer…' : 'ready');
   } else if (resultSummary) {
     setStatus(data.awaiting_input ? 'waiting for your answer…' : 'ready');
@@ -2880,7 +2919,9 @@ let ptrDown = false;
 // Interrupt: tap the orb while assistant is speaking or a task is running.
 // Mirrors the Ctrl-key barge-in on desktop.
 async function interrupt() {
-  // stop browser-side TTS playback immediately
+  // stop browser-side TTS playback immediately AND bump the token so any
+  // in-flight "await audio ended" resolves (pause() never fires 'ended').
+  playToken++;
   if (currentAudio) {
     try { currentAudio.pause(); currentAudio = null; } catch (_) {}
   }
@@ -2906,6 +2947,7 @@ function assistantActive() {
 
 // stop without the "Paused" announcement — like Esc/cancel
 async function stopAssistant() {
+  playToken++;
   if (currentAudio) {
     try { currentAudio.pause(); currentAudio = null; } catch (_) {}
   }
@@ -2934,6 +2976,7 @@ ptt.addEventListener('pointerdown', (e) => {
   } else {
     // click mode: toggle on each press
     if (recording) stopRec();
+    else if (micBusy) pendingToggle = true;  // second tap while starting -> stop when ready
     else startRec();
   }
 });
@@ -3009,13 +3052,9 @@ async function sendTypedText(t) {
     const data = await res.json();
     const rid = data.request_id;
     setStatus('working…', true);
-    while (true) {
-      await new Promise(r => setTimeout(r, 900));
-      const r = await fetch(BASE + '/api/result/' + rid);
-      const poll = await r.json();
-      if (poll.status === 'done') { await playResult(poll); break; }
-      if (poll.status === 'unknown') { addMsg('err', 'Request lost.'); break; }
-    }
+    // capped + always-settling poll (prevents orb freeze on a stuck bridge)
+    const out = await pollResult(rid);
+    if (out) await playResult(out);
   } catch (err) {
     addMsg('err', 'Request failed: ' + err.message);
     setStatus('error');
