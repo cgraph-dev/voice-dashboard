@@ -2318,6 +2318,7 @@ let pendingToggle=false; // a tap arrived while getUserMedia was pending -> togg
 let pushMode = 'hold';  // 'hold' = press-and-hold, 'tap' = one-tap toggle
 let currentAudio = null;  // track TTS audio so orb tap can interrupt
 let playToken = 0;        // generation counter: bump to abort any in-flight audio await
+let busyWatchdog = null;  // re-arms the orb if a send/poll ever sticks (freeze safety)
 let tapTimer = null;      // double-tap detection on mobile
 
 function reportHref(id) {
@@ -2556,6 +2557,7 @@ async function stopRec() {
 
 async function sendAudio(pcm) {
   busy = true;
+  armBusy(120000);           // hard safety: orb re-arms even if this stalls
   ptt.disabled = true;
   setPttLabel('listening to result...');
   let rid;
@@ -2577,6 +2579,7 @@ async function sendAudio(pcm) {
     addMsg('err', 'Request failed: ' + err.message);
     setStatus('error');
   } finally {
+    disarmBusy();
     busy = false;
     ptt.disabled = false;
     updatePttUI();
@@ -2876,6 +2879,30 @@ function updatePttUI() {
     hintEl.textContent = 'hold to talk · release to send · esc = stop';
   }
 }
+
+// ---- orb watchdog: never let `busy`/(disabled) stick permanently -----------
+// We centralise busy-set/clear so a stray race can never freeze the orb: every
+// time busy goes true we arm a timer that "re-arms" (busy=false, ptt enabled)
+// after a hard cap. Even if a promise is abandoned, the orb recovers on its own.
+function reArmOrb() {
+  busy = false;
+  recording = false;
+  ptt.disabled = false;
+  if (busyWatchdog) { clearTimeout(busyWatchdog); busyWatchdog = null; }
+  // release a held mic
+  try { if (micStream && micStream.getTracks) micStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+  micStream = null;
+  updatePttUI();
+  setStatus('ready');
+}
+function armBusy(clearMs) {
+  if (busyWatchdog) clearTimeout(busyWatchdog);
+  busyWatchdog = setTimeout(() => { busyWatchdog = null; reArmOrb(); }, clearMs || 120000);
+}
+function disarmBusy() {
+  if (busyWatchdog) { clearTimeout(busyWatchdog); busyWatchdog = null; }
+}
+
 modebtn.addEventListener('click', () => {
   pttMode = pttMode === 'click' ? 'hold' : 'click';
   localStorage.setItem('vdb_ptt_mode', pttMode);
@@ -2938,6 +2965,8 @@ async function interrupt() {
   }
   setStatus('interrupted');
   setTimeout(() => setStatus('ready'), 1200);
+  // A rapid interrupt must also un-stick the orb (busy/ptt) so it never freezes.
+  setTimeout(() => reArmOrb(), 1300);
 }
 
 // true when the assistant is busy: speaking (currentAudio) OR thinking/polling (busy)
@@ -2962,6 +2991,7 @@ async function stopAssistant() {
   }
   setStatus('stopped');
   setTimeout(() => setStatus('ready'), 1200);
+  setTimeout(() => reArmOrb(), 1300);
 }
 
 ptt.addEventListener('pointerdown', (e) => {
@@ -3040,6 +3070,7 @@ async function sendTyped() {
 async function sendTypedText(t) {
   if (!t || busy) return;
   busy = true;
+  armBusy(120000);           // hard safety: orb re-arms even if this stalls
   ptt.disabled = true;
   hideDecisionOptions();
   try {
@@ -3059,6 +3090,7 @@ async function sendTypedText(t) {
     addMsg('err', 'Request failed: ' + err.message);
     setStatus('error');
   } finally {
+    disarmBusy();
     busy = false;
     ptt.disabled = false;
     setStatus('ready');
